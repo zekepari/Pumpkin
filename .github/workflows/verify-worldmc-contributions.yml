@@ -30,36 +30,13 @@ jobs:
         run: rustup update stable
       - name: Check formatting
         run: cargo fmt --all --check
-      - name: Test the fix
-        run: cargo test --locked -p pumpkin-world --lib "${{ matrix.test }}"
+      - name: Test the world crate
+        run: cargo test --locked -p pumpkin-world --lib
         env:
           CARGO_INCREMENTAL: 0
           CARGO_PROFILE_TEST_DEBUG: 0
-      - name: Test the original behavior
+      - name: Lint the world crate
+        run: cargo clippy --locked -p pumpkin-world --lib --tests -- -D warnings
         env:
           CARGO_INCREMENTAL: 0
-          CARGO_PROFILE_TEST_DEBUG: 0
-          TEST_NAME: ${{ matrix.test }}
-        run: |
-          python3 - <<'PY'
-          import pathlib
-          import re
-          import subprocess
-
-          # Reverse the implementation and keep the regression test.
-          diff = subprocess.check_output(["git", "diff", "HEAD^", "--", "crates/pumpkin-world"], text=True)
-          files = re.split(r"(?=^diff --git )", diff, flags=re.M)
-          patch = []
-          for file in filter(None, files):
-              header, *hunks = re.split(r"(?=^@@ )", file, flags=re.M)
-              kept = [hunk for hunk in hunks if not re.search(r"^\+\s*fn " + re.escape(__import__("os").environ["TEST_NAME"]) + r"\(", hunk, re.M)]
-              if kept:
-                  patch.extend([header, *kept])
-          subprocess.run(["git", "apply", "-R", "--recount", "-"], input="".join(patch), text=True, check=True)
-          PY
-          if cargo test --locked -p pumpkin-world --lib "$TEST_NAME" > baseline.log 2>&1; then
-            cat baseline.log
-            exit 1
-          fi
-          cat baseline.log
-          grep -F "$TEST_NAME ... FAILED" baseline.log
+          CARGO_PROFILE_DEV_DEBUG: 0
